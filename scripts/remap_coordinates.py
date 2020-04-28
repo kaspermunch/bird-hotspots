@@ -13,6 +13,7 @@ import os, sys
 import ete3
 np.random.seed(7)
 
+import genominterv
 
 
 def get_remapped(query, annot):
@@ -38,24 +39,6 @@ def get_overlapping(query, annot):
         query_starts = query_group.start.tolist()
         query_ends = query_group.end.tolist()
 
-#         idx_list = list()  
-#         for pos in annot_group.pos:
-#             idx = bisect.bisect_right(query_starts, pos) - 1
-#             if pos < query_ends[idx]:
-#                 idx_list.append(idx)                
-#             idx_list = sorted(set(idx_list))
-#         df_list.append(query_group.iloc[idx_list])
-
-#         idx_list = list()  
-#         for pos in annot_group.pos:
-#             i = bisect.bisect_right(query_starts, pos) - 1
-#             if i and pos < query_ends[i-1]:
-#                 idx_list.append(i-1)                
-#         idx_list = sorted(set(idx_list))
-#         pos_list.append(pos)
-#         df = query_group.iloc[idx_list].assign(hotspot_center=pos)
-#         df_list.append(df)
-        
         # loop over hotspot centers
         for hotspot_center in annot_group.pos:
             # find index of overlapping hotspot, if any
@@ -67,9 +50,7 @@ def get_overlapping(query, annot):
 
     query_overlap = pd.concat(df_list).reset_index(drop=True)
     
-    # Add the extra columns that are in `skew_data_dist` so concatention is possible and set `start` and `end` to 0:
-#     query_overlap['prox_start'] = query_overlap.start
-#     query_overlap['prox_end'] = query_overlap.end
+    # Add the extra columns so concatention is possible and set `start` and `end` to 0:
     query_overlap['start_prox'] = query_overlap.hotspot_center
     query_overlap['end_prox'] = query_overlap.hotspot_center
     query_overlap.drop(columns=['hotspot_center'], inplace=True)
@@ -96,29 +77,17 @@ def remap_data(query, annot):
 
     merged = pd.concat([query_overlap, query_dist], sort=True)
     
-    
-#     # there can be more than one hotspot center in each
-#     query_overlap.drop_duplicates(subset=['chrom', 'start', 'prox_start', 'hotspot_center'], keep="first", inplace=True)
-    
-#     merged['pos'] = (merged.start + (merged.end - merged.start) / 2).astype(float).round().astype(int)
     merged['pos'] = (merged.start + (merged.end - merged.start) / 2).astype(np.double)
 
-#     merged['bin'] = merged.pos // 1000 * 1000
     merged['bin'] = merged.pos.round(-3) # round to closest thousand
 
     # A bit of a hack: we want there to be one wy
     # indow bin for each hotspot.
     # In the special case (there is only one) where pos is 500 the bin is 
     # rounded down to 0, leaving two zero bins and no 1000kb bin. 
-    # So we just set that to zero:
-    merged.loc[merged.pos == 500.0] = 0
-    
-    
-    
-#     # there can be more than one hotspot center in each
-#     query_overlap.drop_duplicates(subset=['chrom', 'start_orig', 'prox_start'], keep="first", inplace=True)
-
-    
+    # So we just set that to 1000 (effectively rounding that 500 up insetead of down.):
+    merged.loc[merged.pos == 500.0, 'bin'] = 1000
+    merged.loc[merged.pos == -500.0, 'bin'] = -1000
     
     return merged
 
@@ -161,17 +130,11 @@ def optimize_data_frame(df, inplace=False, down_int='integer'):
 
 
 
-_, species_dir, hotspot_data_file, cgi_data_file, promoter_data_file, tss_data_file, tes_data_file, outfile_hotspots, outfile_cgi, outfile_promoters, outfile_tss, outfile_tes, outfile_hotspots_rel_cgi, outfile_hotspots_rel_tss, outfile_hotspots_rel_tes = sys.argv
+# _, species_dir, hotspot_data_file, cgi_data_file, promoter_data_file, tss_data_file, tes_data_file, outfile_hotspots, outfile_cgi, outfile_promoters, outfile_tss, outfile_tes, outfile_hotspots_rel_cgi, outfile_hotspots_rel_tss, outfile_hotspots_rel_tes = sys.argv
+_, species_dir, hotspot_data_file, cgi_data_file, promoter_data_file, tss_data_file, tes_data_file, \
+    outfile_hotspots, outfile_cgi, outfile_promoters, outfile_tss, outfile_tes = sys.argv
 
 species_dir = Path(species_dir)
-
-
-# data_path = Path('/project/Birds/faststorage/data')
-# results_path = Path('/project/Birds/faststorage/people/kmt/results')
-# figures_path = Path('/project/Birds/faststorage/people/kmt/figures')
-
-
-import genominterv
 
 chromosomes = ['1', '1A', '2', '3', '4', '4A', '5', '6', '7', 
                '8', '9', '10', '11', '12', '13', '14', '15']
@@ -234,15 +197,16 @@ remapped = remap_data(data, tes)
 remapped.to_csv(outfile_tes, sep='\t', index=False)
 
 
-# remap hotspots relative to cgi and write file
-remapped = remap_data(hotspots, cgi)
-remapped.to_csv(outfile_hotspots_rel_cgi, sep='\t', index=False)
+# # remap hotspots relative to cgi and write file
+# remapped = remap_data(hotspots, cgi)
+# remapped.to_csv(outfile_hotspots_rel_cgi, sep='\t', index=False)
 
-# remap hotspots relative to tss and write file
-remapped = remap_data(hotspots, tss)
-remapped.to_csv(outfile_hotspots_rel_tss, sep='\t', index=False)
+# # remap hotspots relative to tss and write file
+# remapped = remap_data(hotspots, tss)
+# remapped.to_csv(outfile_hotspots_rel_tss, sep='\t', index=False)
 
-# remap hotspots relative to tes and write file
-remapped = remap_data(hotspots, tes)
-remapped.to_csv(outfile_hotspots_rel_tes, sep='\t', index=False)
+# # remap hotspots relative to tes and write file
+# remapped = remap_data(hotspots, tes)
+# remapped.to_csv(outfile_hotspots_rel_tes, sep='\t', index=False)
+
 
